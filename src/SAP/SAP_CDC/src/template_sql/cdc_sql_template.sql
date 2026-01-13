@@ -12,15 +12,28 @@
 --  See the License for the specific language governing permissions and
 --  limitations under the License.
 
+-- Changed by: Uladzislau Pralat
+-- Changed on: 13 Jan 2026
+-- Changes: Implemented CORTEX_S4_RAW partition pruning optimization to cut cost and improve performance.   
+
+DECLARE recordstamp_from TIMESTAMP;                                                        -- partition pruning optimization   
+DECLARE recordstamp_to TIMESTAMP;                                                          -- partition pruning optimization 
+SET recordstamp_from = (SELECT IFNULL(MAX(recordstamp), TIMESTAMP('0001-01-01 00:00:00'))  -- partition pruning optimization
+                        FROM `${target_table}`);                                           -- partition pruning optimization
+SET recordstamp_to   = (SELECT IFNULL(MAX(recordstamp), TIMESTAMP('9999-12-31 23:59:59'))  -- partition pruning optimization
+                        FROM `${base_table}`);                                             -- partition pruning optimization
+
 MERGE `${target_table}` AS T
 USING (
   WITH
     -- All the rows that arrived in raw table after the latest CDC table refresh.
     NewRawRecords AS (
       SELECT * FROM `${base_table}`
-      WHERE recordstamp >= (
-        SELECT IFNULL(MAX(recordstamp), TIMESTAMP('1940-12-25 05:30:00+00'))
-        FROM `${target_table}`)
+--    WHERE recordstamp >= (                                                               -- partition pruning optimization
+--      SELECT IFNULL(MAX(recordstamp), TIMESTAMP('3940-12-25 05:30:00+00'))               -- partition pruning optimization
+      WHERE recordstamp >= recordstamp_from                                                -- partition pruning optimization  
+        AND DATE(recordstamp) BETWEEN DATE(recordstamp_from) AND DATE(recordstamp_to)      -- partition pruning optimization
+        FROM `${target_table}`)        
       AND ${primary_keys_not_null_clause}
     )
     -- For each unique record (by primary key), find chronologically latest row. This ensures CDC
